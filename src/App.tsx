@@ -2,17 +2,14 @@ import { useEffect, useState } from "react";
 import {
   MessageSquare,
   Send,
-  Wallet,
   LineChart,
   ArrowUpDown,
-  Settings,
-  Bell,
-  Sparkles,
   Shield,
+  Sparkles,
   Coins,
 } from "lucide-react";
 import Message from "./component/Message";
-import { bearNetworkChainMainnet } from "viem/chains";
+import { ChainId } from "@injectivelabs/ts-types";
 
 function App({ children }) {
   const [messages, setMessages] = useState([
@@ -25,9 +22,117 @@ function App({ children }) {
   const [input, setInput] = useState("");
   const [showFeatures, setShowFeatures] = useState(true);
   const [loading, setLoading] = useState(false);
-
-  // demo check button
   const [connected, setConnected] = useState(false);
+  const [injectiveAddress, setInjectiveAddress] = useState("");
+  const [agentAddress, setAgentAddress] = useState("");
+
+  // Function to check and get Keplr instance
+  const getKeplr = () => {
+    if (!window.keplr) {
+      throw new Error("Keplr extension not installed");
+    }
+    return window.keplr;
+  };
+
+  // Function to enable Keplr and fetch addresses
+  const connectKeplr = async () => {
+    try {
+      const keplr = getKeplr();
+      const chainId = ChainId.Testnet;
+      await keplr.enable(chainId);
+      const [account] = await keplr.getOfflineSigner(chainId).getAccounts();
+      setInjectiveAddress(account.address);
+      setConnected(true);
+      localStorage.setItem("walletAddress", account.address); // Store wallet address in local storage
+      console.log("Connected address:", account.address);
+
+      // Call switch_agent API with wallet address as name
+      await handleAgentApiCall(account.address);
+
+      // Fetch and display the agent address
+      await fetchAgentAddress(account.address);
+    } catch (error) {
+      console.error("Failed to connect to Keplr:", error);
+      setConnected(false);
+    }
+  };
+
+  // Function to disconnect Keplr
+  const disconnectKeplr = () => {
+    setConnected(false);
+    setInjectiveAddress("");
+    setAgentAddress("");
+    localStorage.removeItem("walletAddress"); // Remove wallet address from local storage
+    console.log("Disconnected from Keplr");
+  };
+
+  // Function to handle switch_agent and create_agent API calls
+  const handleAgentApiCall = async (walletAddress: string) => {
+    try {
+      const response = await fetch("http://192.168.1.11:5000/switch_agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: walletAddress }),
+      });
+
+      const data = await response.json();
+      console.log("Response from switch_agent API:", data);
+
+      if (data.error) {
+        // If agent not found, call create_agent API
+        if (data.error.includes("not found")) {
+          const response2 = await fetch(
+            "http://192.168.1.11:5000/create_agent",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: walletAddress }),
+            }
+          );
+
+          const data2 = await response2.json();
+          console.log("Response from create_agent API:", data2);
+        }
+      }
+    } catch (error) {
+      console.error("Error during API call:", error);
+    }
+  };
+
+  // Function to fetch and display the agent address
+  const fetchAgentAddress = async (walletAddress: string) => {
+    try {
+      const response = await fetch("http://192.168.1.11:5000/list_agents");
+      const data = await response.json();
+      console.log("Response from list_agents API:", data);
+
+      // Search for the agent with the matching wallet address
+      const agents = data.agents;
+      for (const key in agents) {
+        const value = agents[key];
+        console.log('Key:', key, 'Value:', value);
+        console.log(typeof value, typeof walletAddress);
+        if (key === walletAddress) {
+          console.log("wallet address", value);
+          setAgentAddress(agents[key].address);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching agent address:", error);
+    }
+  };
+
+  // On component mount, check if wallet address exists in local storage
+  useEffect(() => {
+    const storedWalletAddress = localStorage.getItem("walletAddress");
+    if (storedWalletAddress) {
+      setInjectiveAddress(storedWalletAddress);
+      setConnected(true);
+      handleAgentApiCall(storedWalletAddress); // Call API with stored wallet address
+      fetchAgentAddress(storedWalletAddress); // Fetch agent address
+    }
+  }, []);
 
   const features = [
     {
@@ -91,60 +196,19 @@ function App({ children }) {
     }
   };
 
-  useEffect(() => {
-    const initialApiCall = async () => {
-      if (!connected) {
-        console.log("Not connected");
-        return;
-      }
-
-      try {
-        const name = "abcweqwrqf";
-        const response = await fetch("http://192.168.1.11:5000/switch_agent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        });
-
-        const data = await response.json();
-        console.log("Response from backend:", data);
-
-        if (data.error) {
-          // Check if the error is specifically "Agent not found"
-          if (data.error.includes("not found")) {
-            // const name2 = "qwertyui";
-            const response2 = await fetch(
-              "http://192.168.1.11:5000/create_agent",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: name }),
-              }
-            );
-
-            const data2 = await response2.json();
-            console.log("Response from backend api 2:", data2);
-          }
-        }
-      } catch (error) {
-        console.error("Error during fetch:", error);
-      }
-    };
-
-    if (connected) {
-      initialApiCall();
-    }
-  }, [connected]); // Runs only when 'connected' changes
-
   return (
     <div className="min-h-screen bg-[#070B14] flex">
       {/* Sidebar */}
       <div className="w-72 bg-[#0D1117] p-6 hidden md:flex flex-col border-r border-[#1C2333]">
         <button
-          className="bg-blue-500 mb-5 p-4 text-white font-bold rounded"
-          onClick={() => setConnected(!connected)}
+          className={`mb-5 p-4 font-bold rounded transition-all duration-300 ${
+            connected
+              ? "bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600"
+              : "bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
+          } text-white shadow-lg hover:shadow-xl transform hover:scale-105`}
+          onClick={connected ? disconnectKeplr : connectKeplr}
         >
-          check button
+          {connected ? `Disconnect` : "Connect Keplr"}
         </button>
         <div className="flex items-center space-x-3 mb-10">
           <div className="relative">
@@ -175,13 +239,6 @@ function App({ children }) {
             </button>
           ))}
         </nav>
-
-        {/* <div className="pt-6 border-t border-[#1C2333]">
-          <button className="flex items-center space-x-3 w-full px-4 py-3 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-300">
-            <Settings className="w-5 h-5" />
-            <span className="font-medium">Settings</span>
-          </button>
-        </div> */}
       </div>
 
       {/* Main Content */}
@@ -189,13 +246,10 @@ function App({ children }) {
         {/* Header */}
         <header className="h-16 border-b border-[#1C2333] flex items-center justify-between px-6">
           <div className="text-gray-400 text-sm">
-            Connected to Injective Chain
+            {connected
+              ? `Connected to Injective Chain: ${injectiveAddress.slice(0, 10)}...`
+              : "Not connected"}
           </div>
-          {/* <button className="relative p-2 hover:bg-cyan-500/10 rounded-full transition-all duration-300">
-            <Bell className="w-6 h-6 text-gray-400" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-cyan-400 rounded-full animate-ping"></span>
-            <span className="absolute top-2 right-2 w-2 h-2 bg-cyan-400 rounded-full"></span>
-          </button> */}
         </header>
 
         {/* Messages Container */}
@@ -219,28 +273,6 @@ function App({ children }) {
             </div>
           )}
           <Message messages={messages} />
-          {/* {messages.map((message, index) => {
-            console.log(message);
-
-            return (
-              <div
-                key={index}
-                className={`flex ${
-                  message.type === "user" ? "justify-end" : "justify-start"
-                } animate-slideIn`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-2xl p-5 ${
-                    message.type === "user"
-                      ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-white"
-                      : "bg-[#1C2333] text-gray-200"
-                  }`}
-                >
-                  {message.content}
-                </div>
-              </div>
-            );
-          })} */}
         </div>
 
         {/* Input Form */}
@@ -270,6 +302,20 @@ function App({ children }) {
             </div>
           </form>
         </div>
+
+        {/* Agent Address Display */}
+        {connected && agentAddress && (
+          <div className="border-t border-[#1C2333] p-6">
+            <div className="max-w-4xl mx-auto">
+              <textarea
+                className="w-full px-6 py-3 bg-[#1C2333] rounded-xl border border-[#2A3441] focus:outline-none focus:border-cyan-500/50 transition-all duration-300 text-gray-200 placeholder-gray-500"
+                rows={4}
+                value={`AI Agent Address: ${agentAddress}`}
+                readOnly
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

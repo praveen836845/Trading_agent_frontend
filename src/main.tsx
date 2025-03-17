@@ -2,42 +2,32 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import "@rainbow-me/rainbowkit/styles.css";
-import {
-  RainbowKitProvider,
-  getDefaultConfig,
-} from "@rainbow-me/rainbowkit";
-import { WagmiProvider  } from "wagmi";
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { defineChain } from "wagmi";
 
-import {
-  mainnet,
-} from "wagmi/chains";
-import {
-  QueryClientProvider,
-  QueryClient,
-} from "@tanstack/react-query";
+// Import necessary Injective and Keplr functionalities
+import { ChainId } from '@injectivelabs/ts-types';
+import { getInjectiveAddress } from '@injectivelabs/sdk-ts';
 
-const queryClient = new QueryClient();
+// Function to check and get Keplr instance
+const getKeplr = () => {
+  if (!window.keplr) {
+    throw new Error('Keplr extension not installed');
+  }
+  return window.keplr;
+};
 
+// Function to enable Keplr and fetch addresses
+const enableKeplr = async () => {
+  const keplr = getKeplr();
+  const chainId = ChainId.Testnet;
+  await keplr.enable(chainId);
+  const injectiveAddresses = await keplr.getOfflineSigner(chainId).getAccounts();
+  console.log(injectiveAddresses);
+  return injectiveAddresses;
+};
 
-const config = getDefaultConfig({
-  appName: 'RainbowKit demo',
-  projectId: 'YOUR_PROJECT_ID',
-  chains: [mainnet],
-})
-
-
+// Render your application
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-       
-          <App >  <ConnectButton /></App>
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <App enableKeplr={enableKeplr} />
   </StrictMode>
 );
