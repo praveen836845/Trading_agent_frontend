@@ -69,7 +69,7 @@ function App({ children }) {
   // Function to handle switch_agent and create_agent API calls
   const handleAgentApiCall = async (walletAddress: string) => {
     try {
-      const response = await fetch("http://192.168.1.11:5000/switch_agent", {
+      const response = await fetch("https://injective-backend-deploy-pwyx.onrender.com/switch_agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: walletAddress }),
@@ -82,7 +82,7 @@ function App({ children }) {
         // If agent not found, call create_agent API
         if (data.error.includes("not found")) {
           const response2 = await fetch(
-            "http://192.168.1.11:5000/create_agent",
+            "https://injective-backend-deploy-pwyx.onrender.com/create_agent",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -102,7 +102,7 @@ function App({ children }) {
   // Function to fetch and display the agent address
   const fetchAgentAddress = async (walletAddress: string) => {
     try {
-      const response = await fetch("http://192.168.1.11:5000/list_agents");
+      const response = await fetch("https://injective-backend-deploy-pwyx.onrender.com/list_agents");
       const data = await response.json();
       console.log("Response from list_agents API:", data);
 
@@ -161,7 +161,7 @@ function App({ children }) {
     setLoading(true);
 
     try {
-      const response = await fetch("http://192.168.1.11:5000/chat", {
+      const response = await fetch("https://injective-backend-deploy-pwyx.onrender.com/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
